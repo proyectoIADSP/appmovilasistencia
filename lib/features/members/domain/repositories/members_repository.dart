@@ -2,6 +2,15 @@ import '../entities/member.dart';
 
 abstract class MembersRepository {
   Future<List<Member>> getActiveMembers();
+
+  /// Miembros inactivos desde el backend.
+  /// Lanza [Failure] si el endpoint no existe todavía.
+  Future<List<Member>> getInactiveMembers();
+
+  /// Activos + inactivos combinados (para resolver nombres en estadísticas).
+  /// Si el backend no expone inactivos, devuelve solo los activos.
+  Future<List<Member>> getAllMembers();
+
   Future<Member> getMember(int id);
   Future<Member> createMember({
     required String firstName,

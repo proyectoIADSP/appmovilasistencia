@@ -7,6 +7,18 @@ class GetActiveMembersUseCase {
   Future<List<Member>> call() => _repository.getActiveMembers();
 }
 
+class GetInactiveMembersUseCase {
+  const GetInactiveMembersUseCase(this._repository);
+  final MembersRepository _repository;
+  Future<List<Member>> call() => _repository.getInactiveMembers();
+}
+
+class GetAllMembersUseCase {
+  const GetAllMembersUseCase(this._repository);
+  final MembersRepository _repository;
+  Future<List<Member>> call() => _repository.getAllMembers();
+}
+
 class GetMemberUseCase {
   const GetMemberUseCase(this._repository);
   final MembersRepository _repository;

@@ -18,6 +18,12 @@ final membersRepositoryProvider = Provider<MembersRepository>((ref) {
 final getActiveMembersUseCaseProvider = Provider(
   (ref) => GetActiveMembersUseCase(ref.watch(membersRepositoryProvider)),
 );
+final getInactiveMembersUseCaseProvider = Provider(
+  (ref) => GetInactiveMembersUseCase(ref.watch(membersRepositoryProvider)),
+);
+final getAllMembersUseCaseProvider = Provider(
+  (ref) => GetAllMembersUseCase(ref.watch(membersRepositoryProvider)),
+);
 final getMemberUseCaseProvider = Provider(
   (ref) => GetMemberUseCase(ref.watch(membersRepositoryProvider)),
 );
@@ -125,34 +131,37 @@ class InactiveMembersState {
 class InactiveMembersNotifier extends StateNotifier<InactiveMembersState> {
   InactiveMembersNotifier({
     required this._store,
-    required this._getMember,
+    required this._getInactiveMembers,
     required this._activateMember,
   }) : super(const InactiveMembersState()) {
     Future.microtask(load);
   }
 
   final InactiveMembersStore _store;
-  final GetMemberUseCase _getMember;
+  final GetInactiveMembersUseCase _getInactiveMembers;
   final ActivateMemberUseCase _activateMember;
 
   Future<void> load() async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      final cached = await _store.getAll();
-      final refreshed = <Member>[];
-      for (final cachedMember in cached) {
-        try {
-          final remote = await _getMember(cachedMember.id);
-          if (!remote.isActive) {
-            refreshed.add(remote);
-          }
-        } catch (_) {
-          // Si no se puede consultar, conservamos el cache local.
-          refreshed.add(cachedMember);
-        }
+      try {
+        // Backend es la fuente de verdad ahora que existe /members/inactive.
+        final backend = await _getInactiveMembers();
+        final members = backend
+            .map((m) => m.copyWith(isActive: false))
+            .toList()
+          ..sort((a, b) => a.fullName.toLowerCase().compareTo(
+                b.fullName.toLowerCase(),
+              ));
+        await _store.saveAll(members);
+        state = InactiveMembersState(members: members);
+        return;
+      } catch (_) {
+        // Sin red / endpoint caído: usamos el respaldo local.
       }
-      await _store.saveAll(refreshed);
-      state = InactiveMembersState(members: refreshed);
+
+      final local = await _store.getAll();
+      state = InactiveMembersState(members: local);
     } on Failure catch (e) {
       state = state.copyWith(isLoading: false, errorMessage: e.message);
     } catch (e) {
@@ -170,9 +179,9 @@ class InactiveMembersNotifier extends StateNotifier<InactiveMembersState> {
     try {
       await _activateMember(memberId);
       await _store.remove(memberId);
-      final remaining = await _store.getAll();
-      state = InactiveMembersState(
-        members: remaining,
+      await load();
+      state = state.copyWith(
+        isLoading: false,
         actionMessage: 'Miembro reactivado correctamente',
       );
       return true;
@@ -190,7 +199,7 @@ final inactiveMembersProvider =
     StateNotifierProvider<InactiveMembersNotifier, InactiveMembersState>((ref) {
   return InactiveMembersNotifier(
     store: ref.watch(inactiveMembersStoreProvider),
-    getMember: ref.watch(getMemberUseCaseProvider),
+    getInactiveMembers: ref.watch(getInactiveMembersUseCaseProvider),
     activateMember: ref.watch(activateMemberUseCaseProvider),
   );
 });

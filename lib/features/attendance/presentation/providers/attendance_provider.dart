@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/di/core_providers.dart';
 import '../../../../core/error/failures.dart';
+import '../../../../core/storage/inactive_members_store.dart';
 import '../../../members/domain/entities/member.dart';
 import '../../../members/domain/usecases/members_usecases.dart';
 import '../../../members/presentation/providers/members_provider.dart';
@@ -374,6 +375,7 @@ class StatsNotifier extends StateNotifier<StatsState> {
     required this._getMembers,
     required this._getSaturdays,
     required this._getByDate,
+    required this._inactiveStore,
   }) : super(StatsState(
           year: DateTime.now().year,
           month: DateTime.now().month,
@@ -382,9 +384,10 @@ class StatsNotifier extends StateNotifier<StatsState> {
   }
 
   final GetAttendanceStatsUseCase _getStats;
-  final GetActiveMembersUseCase _getMembers;
+  final GetAllMembersUseCase _getMembers;
   final GetSaturdaysUseCase _getSaturdays;
   final GetAttendanceByDateUseCase _getByDate;
+  final InactiveMembersStore _inactiveStore;
 
   Future<void> setYearMonth(int year, int month) async {
     state = state.copyWith(year: year, month: month, clearFilter: true);
@@ -415,6 +418,11 @@ class StatsNotifier extends StateNotifier<StatsState> {
       final members = base[1] as List<Member>;
       final saturdays = base[2] as List<DateTime>;
 
+      // Respaldo local: nombres de miembros desactivados en este dispositivo,
+      // para que no aparezcan como "Miembro #id" mientras el backend
+      // no exponga el listado de inactivos.
+      final localInactive = await _inactiveStore.getAll();
+
       final recordsByDate = await Future.wait(
         saturdays.map((date) => _getByDate(date)),
       );
@@ -429,9 +437,15 @@ class StatsNotifier extends StateNotifier<StatsState> {
         );
       }
 
+      // El backend/activos tienen prioridad; el respaldo local rellena huecos.
+      final membersById = <int, Member>{
+        for (final m in localInactive) m.id: m,
+        for (final m in members) m.id: m,
+      };
+
       state = state.copyWith(
         stats: stats,
-        membersById: {for (final m in members) m.id: m},
+        membersById: membersById,
         saturdayGroups: groups,
         isLoading: false,
       );
@@ -447,8 +461,9 @@ final statsProvider =
     StateNotifierProvider<StatsNotifier, StatsState>((ref) {
   return StatsNotifier(
     getStats: ref.watch(getAttendanceStatsUseCaseProvider),
-    getMembers: ref.watch(getActiveMembersUseCaseProvider),
+    getMembers: ref.watch(getAllMembersUseCaseProvider),
     getSaturdays: ref.watch(getSaturdaysUseCaseProvider),
     getByDate: ref.watch(getAttendanceByDateUseCaseProvider),
+    inactiveStore: ref.watch(inactiveMembersStoreProvider),
   );
 });

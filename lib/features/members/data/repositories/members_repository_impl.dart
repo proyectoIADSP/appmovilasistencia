@@ -20,6 +20,33 @@ class MembersRepositoryImpl implements MembersRepository {
   }
 
   @override
+  Future<List<Member>> getInactiveMembers() async {
+    try {
+      final list = await _remote.getInactiveMembers();
+      return list.map((e) => e.toEntity()).toList();
+    } catch (e) {
+      throw ErrorMapper.failureFromException(e);
+    }
+  }
+
+  @override
+  Future<List<Member>> getAllMembers() async {
+    try {
+      final list = await _remote.getAllMembers();
+      return list.map((e) => e.toEntity()).toList();
+    } catch (_) {
+      // Fallback: activos + inactivos por separado.
+      final active = await getActiveMembers();
+      try {
+        final inactive = await getInactiveMembers();
+        return [...active, ...inactive];
+      } catch (__) {
+        return active;
+      }
+    }
+  }
+
+  @override
   Future<Member> getMember(int id) async {
     try {
       final dto = await _remote.getMember(id);

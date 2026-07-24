@@ -302,7 +302,15 @@ class _MembersPageState extends ConsumerState<MembersPage> {
                     else
                       FilledButton.tonalIcon(
                         onPressed: () => _reactivate(member),
-                        icon: const Icon(Icons.restart_alt_rounded),
+                        style: FilledButton.styleFrom(
+                          // El tema usa Size.fromHeight (ancho ∞); en un Row
+                          // eso rompe el layout. Aquí forzamos tamaño intrínseco.
+                          minimumSize: const Size(0, 40),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                        ),
+                        icon: const Icon(Icons.restart_alt_rounded, size: 18),
                         label: const Text('Reactivar'),
                       ),
                   ],

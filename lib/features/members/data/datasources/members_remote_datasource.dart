@@ -4,6 +4,11 @@ import '../models/member_models.dart';
 
 abstract class MembersRemoteDataSource {
   Future<List<MemberDto>> getActiveMembers();
+  Future<List<MemberDto>> getInactiveMembers();
+
+  /// Activos + inactivos (`GET /members?includeInactive=true`).
+  Future<List<MemberDto>> getAllMembers();
+
   Future<MemberDto> getMember(int id);
   Future<MemberDto> createMember(MemberRequestDto request);
   Future<MemberDto> updateMember(int id, MemberRequestDto request);
@@ -21,6 +26,27 @@ class MembersRemoteDataSourceImpl implements MembersRemoteDataSource {
   @override
   Future<List<MemberDto>> getActiveMembers() async {
     final response = await _client.get<List<dynamic>>(_base);
+    final list = response.data ?? [];
+    return list
+        .map((e) => MemberDto.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  @override
+  Future<List<MemberDto>> getInactiveMembers() async {
+    final response = await _client.get<List<dynamic>>('$_base/inactive');
+    final list = response.data ?? [];
+    return list
+        .map((e) => MemberDto.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  @override
+  Future<List<MemberDto>> getAllMembers() async {
+    final response = await _client.get<List<dynamic>>(
+      _base,
+      queryParameters: const {'includeInactive': true},
+    );
     final list = response.data ?? [];
     return list
         .map((e) => MemberDto.fromJson(e as Map<String, dynamic>))
