@@ -1,0 +1,41 @@
+name: appmovilasistencia
+description: Asistencia IASD Pariachi — app de asistencia eclesiástica
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.12.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  flutter_riverpod: ^2.6.1
+  dio: ^5.8.0+1
+  flutter_secure_storage: ^9.2.4
+  go_router: ^15.1.2
+  intl: ^0.20.2
+  equatable: ^2.0.7
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  windows:
+    generate: true
+  web:
+    generate: true
+  image_path: assets/images/app_icon.png
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: assets/images/app_icon.png
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/logo_iasd_pariachi.png
+    - assets/images/app_icon_round.png
