@@ -19,6 +19,24 @@ class Member extends Equatable {
 
   String get fullName => '$firstName $lastName';
 
+  Member copyWith({
+    int? id,
+    String? firstName,
+    String? lastName,
+    String? phoneNumber,
+    String? address,
+    bool? isActive,
+  }) {
+    return Member(
+      id: id ?? this.id,
+      firstName: firstName ?? this.firstName,
+      lastName: lastName ?? this.lastName,
+      phoneNumber: phoneNumber ?? this.phoneNumber,
+      address: address ?? this.address,
+      isActive: isActive ?? this.isActive,
+    );
+  }
+
   @override
   List<Object?> get props =>
       [id, firstName, lastName, phoneNumber, address, isActive];

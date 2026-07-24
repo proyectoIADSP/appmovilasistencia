@@ -2,11 +2,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../config/app_config.dart';
 import '../network/dio_client.dart';
+import '../storage/inactive_members_store.dart';
 import '../storage/secure_token_storage.dart';
 import '../storage/token_storage.dart';
 
 final tokenStorageProvider = Provider<TokenStorage>((ref) {
   return SecureTokenStorage();
+});
+
+final inactiveMembersStoreProvider = Provider<InactiveMembersStore>((ref) {
+  return InactiveMembersStore();
 });
 
 final dioClientProvider = Provider<DioClient>((ref) {

@@ -24,6 +24,7 @@ class MembersPage extends ConsumerStatefulWidget {
     );
     if (changed == true) {
       await ref.read(membersListProvider.notifier).load();
+      await ref.read(inactiveMembersProvider.notifier).load();
     }
   }
 
@@ -34,6 +35,7 @@ class MembersPage extends ConsumerStatefulWidget {
 class _MembersPageState extends ConsumerState<MembersPage> {
   final _searchController = TextEditingController();
   String _query = '';
+  int _tab = 0; // 0 activos, 1 inactivos
 
   @override
   void dispose() {
@@ -51,182 +53,265 @@ class _MembersPageState extends ConsumerState<MembersPage> {
     }).toList();
   }
 
+  Future<void> _reactivate(Member member) async {
+    final ok =
+        await ref.read(inactiveMembersProvider.notifier).activate(member.id);
+    if (!mounted) return;
+    if (ok) {
+      await ref.read(membersListProvider.notifier).load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${member.fullName} reactivado')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(membersListProvider);
+    final activeState = ref.watch(membersListProvider);
+    final inactiveState = ref.watch(inactiveMembersProvider);
+    final isActiveTab = _tab == 0;
+    final source =
+        isActiveTab ? activeState.members : inactiveState.members;
+    final isLoading = isActiveTab
+        ? (activeState.isLoading && activeState.members.isEmpty)
+        : (inactiveState.isLoading && inactiveState.members.isEmpty);
+    final error = isActiveTab
+        ? activeState.errorMessage
+        : inactiveState.errorMessage;
 
-    if (state.isLoading && state.members.isEmpty) {
-      return const AppLoadingView(message: 'Cargando miembros…');
-    }
-    if (state.errorMessage != null && state.members.isEmpty) {
-      return AppErrorView(
-        message: state.errorMessage!,
-        onRetry: () => ref.read(membersListProvider.notifier).load(),
-      );
-    }
-    if (state.members.isEmpty) {
-      return AppEmptyView(
-        icon: Icons.groups_2_outlined,
-        title: 'Sin miembros activos',
-        subtitle: 'Agrega el primer miembro del padrón con el botón Nuevo.',
-        action: FilledButton.icon(
-          onPressed: () => MembersPage.openForm(context, ref),
-          icon: const Icon(Icons.person_add_alt_1_rounded),
-          label: const Text('Crear miembro'),
-        ),
-      );
-    }
-
-    final filtered = _filtered(state.members);
+    ref.listen(inactiveMembersProvider, (prev, next) {
+      if (next.errorMessage != null &&
+          next.errorMessage != prev?.errorMessage) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(next.errorMessage!)),
+        );
+      }
+    });
 
     return Column(
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: AppSearchField(
-            controller: _searchController,
-            hintText: 'Buscar por nombre o celular…',
-            onChanged: (v) => setState(() => _query = v),
-          ),
-        ),
-        Expanded(
-          child: RefreshIndicator(
-            color: AppColors.navy,
-            onRefresh: () => ref.read(membersListProvider.notifier).load(),
-            child: filtered.isEmpty
-                ? ListView(
-                    children: const [
-                      SizedBox(height: 80),
-                      AppEmptyView(
-                        icon: Icons.search_off_rounded,
-                        title: 'Sin resultados',
-                        subtitle: 'Prueba con otro nombre o número.',
-                      ),
-                    ],
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-                    itemCount: filtered.length + 1,
-                    itemBuilder: (context, index) {
-                      if (index == 0) {
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 14),
-                          child: SectionHeader(
-                            title: _query.trim().isEmpty
-                                ? '${filtered.length} miembros'
-                                : '${filtered.length} de ${state.members.length}',
-                            subtitle: 'Toca un miembro para editarlo',
-                          ),
-                        );
-                      }
-                      final member = filtered[index - 1];
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: Material(
-                          color: Colors.white,
-                          borderRadius:
-                              BorderRadius.circular(AppSpacing.radiusMd),
-                          child: InkWell(
-                            borderRadius:
-                                BorderRadius.circular(AppSpacing.radiusMd),
-                            onTap: () => MembersPage.openForm(
-                              context,
-                              ref,
-                              member: member,
-                            ),
-                            child: Container(
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(
-                                  AppSpacing.radiusMd,
-                                ),
-                                border: Border.all(color: AppColors.outline),
-                              ),
-                              child: Row(
-                                children: [
-                                  MemberAvatar(name: member.firstName),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          member.fullName,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .titleMedium
-                                              ?.copyWith(
-                                                fontWeight: FontWeight.w700,
-                                              ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Row(
-                                          children: [
-                                            const Icon(
-                                              Icons.phone_rounded,
-                                              size: 14,
-                                              color: AppColors.textSecondary,
-                                            ),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              member.phoneNumber,
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .bodySmall
-                                                  ?.copyWith(
-                                                    color: AppColors
-                                                        .textSecondary,
-                                                  ),
-                                            ),
-                                          ],
-                                        ),
-                                        if (member.address != null &&
-                                            member.address!
-                                                .trim()
-                                                .isNotEmpty) ...[
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            member.address!,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .bodySmall
-                                                ?.copyWith(
-                                                  color:
-                                                      AppColors.textSecondary,
-                                                ),
-                                          ),
-                                        ],
-                                      ],
-                                    ),
-                                  ),
-                                  Container(
-                                    width: 34,
-                                    height: 34,
-                                    decoration: BoxDecoration(
-                                      color: AppColors.goldMuted,
-                                      borderRadius: BorderRadius.circular(
-                                        AppSpacing.radiusSm,
-                                      ),
-                                    ),
-                                    child: const Icon(
-                                      Icons.chevron_right_rounded,
-                                      color: AppColors.navy,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    },
+          child: Column(
+            children: [
+              SegmentedButton<int>(
+                segments: const [
+                  ButtonSegment(
+                    value: 0,
+                    label: Text('Activos'),
+                    icon: Icon(Icons.how_to_reg_rounded),
                   ),
+                  ButtonSegment(
+                    value: 1,
+                    label: Text('Inactivos'),
+                    icon: Icon(Icons.person_off_outlined),
+                  ),
+                ],
+                selected: {_tab},
+                onSelectionChanged: (set) {
+                  setState(() {
+                    _tab = set.first;
+                    _query = '';
+                    _searchController.clear();
+                  });
+                  if (_tab == 1) {
+                    ref.read(inactiveMembersProvider.notifier).load();
+                  }
+                },
+              ),
+              const SizedBox(height: 12),
+              AppSearchField(
+                controller: _searchController,
+                hintText: 'Buscar por nombre o celular…',
+                onChanged: (v) => setState(() => _query = v),
+              ),
+            ],
           ),
         ),
+        if (error != null && source.isEmpty)
+          Expanded(
+            child: AppErrorView(
+              message: error,
+              onRetry: () {
+                if (isActiveTab) {
+                  ref.read(membersListProvider.notifier).load();
+                } else {
+                  ref.read(inactiveMembersProvider.notifier).load();
+                }
+              },
+            ),
+          )
+        else if (isLoading)
+          const Expanded(child: AppLoadingView(message: 'Cargando miembros…'))
+        else
+          Expanded(
+            child: RefreshIndicator(
+              color: AppColors.navy,
+              onRefresh: () async {
+                if (isActiveTab) {
+                  await ref.read(membersListProvider.notifier).load();
+                } else {
+                  await ref.read(inactiveMembersProvider.notifier).load();
+                }
+              },
+              child: _buildList(
+                context,
+                source: source,
+                isActiveTab: isActiveTab,
+              ),
+            ),
+          ),
       ],
+    );
+  }
+
+  Widget _buildList(
+    BuildContext context, {
+    required List<Member> source,
+    required bool isActiveTab,
+  }) {
+    final filtered = _filtered(source);
+
+    if (source.isEmpty) {
+      return ListView(
+        children: [
+          SizedBox(height: 80),
+          AppEmptyView(
+            icon: isActiveTab
+                ? Icons.groups_2_outlined
+                : Icons.person_off_outlined,
+            title: isActiveTab
+                ? 'Sin miembros activos'
+                : 'Sin miembros inactivos',
+            subtitle: isActiveTab
+                ? 'Agrega el primer miembro del padrón con el botón Nuevo.'
+                : 'Cuando desactives un miembro, aparecerá aquí para reactivarlo.',
+            action: isActiveTab
+                ? FilledButton.icon(
+                    onPressed: () => MembersPage.openForm(context, ref),
+                    icon: const Icon(Icons.person_add_alt_1_rounded),
+                    label: const Text('Crear miembro'),
+                  )
+                : null,
+          ),
+        ],
+      );
+    }
+
+    if (filtered.isEmpty) {
+      return ListView(
+        children: const [
+          SizedBox(height: 80),
+          AppEmptyView(
+            icon: Icons.search_off_rounded,
+            title: 'Sin resultados',
+            subtitle: 'Prueba con otro nombre o número.',
+          ),
+        ],
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+      itemCount: filtered.length + 1,
+      itemBuilder: (context, index) {
+        if (index == 0) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 14),
+            child: SectionHeader(
+              title: _query.trim().isEmpty
+                  ? '${filtered.length} miembros'
+                  : '${filtered.length} de ${source.length}',
+              subtitle: isActiveTab
+                  ? 'Toca un miembro para editarlo'
+                  : 'Toca Reactivar para volver a activarlo',
+            ),
+          );
+        }
+
+        final member = filtered[index - 1];
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Material(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+              onTap: isActiveTab
+                  ? () => MembersPage.openForm(context, ref, member: member)
+                  : null,
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                  border: Border.all(color: AppColors.outline),
+                ),
+                child: Row(
+                  children: [
+                    MemberAvatar(name: member.firstName),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            member.fullName,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.phone_rounded,
+                                size: 14,
+                                color: AppColors.textSecondary,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                member.phoneNumber,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                      color: AppColors.textSecondary,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (isActiveTab)
+                      Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: AppColors.goldMuted,
+                          borderRadius:
+                              BorderRadius.circular(AppSpacing.radiusSm),
+                        ),
+                        child: const Icon(
+                          Icons.chevron_right_rounded,
+                          color: AppColors.navy,
+                        ),
+                      )
+                    else
+                      FilledButton.tonalIcon(
+                        onPressed: () => _reactivate(member),
+                        icon: const Icon(Icons.restart_alt_rounded),
+                        label: const Text('Reactivar'),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -338,9 +423,27 @@ class _MemberFormPageState extends ConsumerState<MemberFormPage> {
     });
     try {
       await ref.read(deactivateMemberUseCaseProvider)(widget.member!.id);
+      await ref
+          .read(inactiveMembersProvider.notifier)
+          .rememberDeactivated(widget.member!);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Miembro desactivado')),
+          SnackBar(
+            content: const Text('Miembro desactivado'),
+            action: SnackBarAction(
+              label: 'Reactivar',
+              onPressed: () {
+                ref
+                    .read(inactiveMembersProvider.notifier)
+                    .activate(widget.member!.id)
+                    .then((ok) {
+                  if (ok) {
+                    ref.read(membersListProvider.notifier).load();
+                  }
+                });
+              },
+            ),
+          ),
         );
         Navigator.of(context).pop(true);
       }
