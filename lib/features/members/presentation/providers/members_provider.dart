@@ -58,7 +58,7 @@ class MembersListState {
 class MembersListNotifier extends StateNotifier<MembersListState> {
   MembersListNotifier(this._getActiveMembers)
       : super(const MembersListState()) {
-    load();
+    Future.microtask(load);
   }
 
   final GetActiveMembersUseCase _getActiveMembers;

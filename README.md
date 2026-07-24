@@ -9,16 +9,27 @@ Arquitectura: **Clean Architecture** + **Riverpod** + **Dio** + **go_router**.
 ## Requisitos
 
 - Flutter 3.44+ / Dart 3.12+
-- Backend `asistenciaBack` corriendo en el puerto **5282**
+- Backend en Render (por defecto) o local en el puerto **5282**
 
 ## Base URL (AppConfig)
 
+Por defecto la app usa **HTTPS en Render**:
+
+`https://asistenciaback-pg60.onrender.com`
+
 | Entorno | URL |
 |---------|-----|
-| Emulador Android | `http://10.0.2.2:5282` |
-| iOS Simulator / Windows / macOS / Web | `http://localhost:5282` |
+| Celular / producción (default) | `https://asistenciaback-pg60.onrender.com` |
+| Emulador Android → API local | `http://10.0.2.2:5282` |
+| iOS Simulator / Desktop → API local | `http://localhost:5282` |
 
-La selección es automática en `lib/core/config/app_config.dart`.
+Override opcional:
+
+```bash
+flutter run --dart-define=API_BASE_URL=http://10.0.2.2:5282
+```
+
+**Nota:** el plan free de Render se duerme; el primer request puede tardar ~30–60 s (timeouts de Dio en 60 s).
 
 ## Credenciales de desarrollo (seed)
 
@@ -27,16 +38,12 @@ La selección es automática en `lib/core/config/app_config.dart`.
 
 ## Cómo ejecutar
 
-1. Levanta el backend en `http://localhost:5282`.
-2. En esta carpeta:
-
 ```bash
 flutter pub get
 flutter run
 ```
 
-- Emulador Android: la app usará `10.0.2.2:5282` (host de tu PC).
-- Escritorio / iOS Simulator: usará `localhost:5282`.
+La app hablará con Render automáticamente (sin localhost).
 
 ### Dispositivo físico Android
 

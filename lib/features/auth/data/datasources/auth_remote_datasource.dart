@@ -15,27 +15,30 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
 
   @override
   Future<AuthResponseModel> login(LoginRequestModel request) async {
-    final response = await _client.post<Map<String, dynamic>>(
+    final response = await _client.post(
       '${AppConfig.apiPrefix}/auth/login',
       data: request.toJson(),
     );
-    return AuthResponseModel.fromJson(response.data!);
+    final data = Map<String, dynamic>.from(response.data as Map);
+    return AuthResponseModel.fromJson(data);
   }
 
   @override
   Future<AuthResponseModel> register(RegisterRequestModel request) async {
-    final response = await _client.post<Map<String, dynamic>>(
+    final response = await _client.post(
       '${AppConfig.apiPrefix}/auth/register',
       data: request.toJson(),
     );
-    return AuthResponseModel.fromJson(response.data!);
+    final data = Map<String, dynamic>.from(response.data as Map);
+    return AuthResponseModel.fromJson(data);
   }
 
   @override
   Future<MeResponseModel> me() async {
-    final response = await _client.get<Map<String, dynamic>>(
+    final response = await _client.get(
       '${AppConfig.apiPrefix}/auth/me',
     );
-    return MeResponseModel.fromJson(response.data!);
+    final data = Map<String, dynamic>.from(response.data as Map);
+    return MeResponseModel.fromJson(data);
   }
 }

@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/widgets/app_ui.dart';
 import '../../domain/entities/user.dart';
 import '../providers/auth_provider.dart';
 
@@ -52,28 +55,55 @@ class _RegisterUserPageState extends ConsumerState<RegisterUserPage> {
     return Scaffold(
       appBar: AppBar(title: const Text('Registrar usuario')),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(AppSpacing.xl),
         child: Form(
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              Container(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                decoration: BoxDecoration(
+                  color: AppColors.goldMuted,
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                  border: Border.all(
+                    color: AppColors.gold.withValues(alpha: 0.35),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.admin_panel_settings_rounded,
+                        color: AppColors.navy),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Solo administradores pueden crear cuentas de diácono o administrador.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: AppColors.navy,
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xl),
               TextFormField(
                 controller: _nameController,
                 decoration: const InputDecoration(
                   labelText: 'Nombre completo',
-                  prefixIcon: Icon(Icons.person_outline),
+                  prefixIcon: Icon(Icons.person_outline_rounded),
                 ),
                 validator: (v) =>
                     (v == null || v.trim().isEmpty) ? 'Ingresa el nombre' : null,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.lg),
               TextFormField(
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
                 decoration: const InputDecoration(
                   labelText: 'Correo electrónico',
-                  prefixIcon: Icon(Icons.email_outlined),
+                  prefixIcon: Icon(Icons.mail_outline_rounded),
                 ),
                 validator: (v) {
                   if (v == null || v.trim().isEmpty) return 'Ingresa el correo';
@@ -81,13 +111,13 @@ class _RegisterUserPageState extends ConsumerState<RegisterUserPage> {
                   return null;
                 },
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.lg),
               TextFormField(
                 controller: _passwordController,
                 obscureText: _obscure,
                 decoration: InputDecoration(
                   labelText: 'Contraseña',
-                  prefixIcon: const Icon(Icons.lock_outline),
+                  prefixIcon: const Icon(Icons.lock_outline_rounded),
                   suffixIcon: IconButton(
                     icon: Icon(
                       _obscure
@@ -103,7 +133,7 @@ class _RegisterUserPageState extends ConsumerState<RegisterUserPage> {
                   return null;
                 },
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.lg),
               DropdownButtonFormField<UserRole>(
                 initialValue: _role,
                 decoration: const InputDecoration(
@@ -123,22 +153,22 @@ class _RegisterUserPageState extends ConsumerState<RegisterUserPage> {
                 },
               ),
               if (auth.errorMessage != null) ...[
-                const SizedBox(height: 16),
-                Text(
-                  auth.errorMessage!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
+                const SizedBox(height: AppSpacing.lg),
+                AppMessageBanner(message: auth.errorMessage!),
               ],
-              const SizedBox(height: 24),
+              const SizedBox(height: AppSpacing.xl),
               FilledButton(
                 onPressed: auth.isLoading ? null : _submit,
                 child: auth.isLoading
                     ? const SizedBox(
                         height: 22,
                         width: 22,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.4,
+                          color: Colors.white,
+                        ),
                       )
-                    : const Text('Registrar'),
+                    : const Text('Registrar usuario'),
               ),
             ],
           ),

@@ -1,3 +1,4 @@
+import '../../../../core/network/json_parsers.dart';
 import '../../domain/entities/user.dart';
 
 class AuthResponseModel {
@@ -17,11 +18,11 @@ class AuthResponseModel {
 
   factory AuthResponseModel.fromJson(Map<String, dynamic> json) {
     return AuthResponseModel(
-      userId: json['userId'] as int,
-      fullName: json['fullName'] as String,
-      email: json['email'] as String,
-      role: json['role'] as int,
-      token: json['token'] as String,
+      userId: parseJsonInt(json['userId'], field: 'userId'),
+      fullName: parseJsonString(json['fullName'], field: 'fullName'),
+      email: parseJsonString(json['email'], field: 'email'),
+      role: parseUserRoleValue(json['role']),
+      token: parseJsonString(json['token'], field: 'token'),
     );
   }
 
@@ -61,10 +62,10 @@ class MeResponseModel {
 
   factory MeResponseModel.fromJson(Map<String, dynamic> json) {
     return MeResponseModel(
-      id: json['id'] as int,
-      email: json['email'] as String,
-      name: json['name'] as String,
-      role: json['role'] as int,
+      id: parseJsonInt(json['id'], field: 'id'),
+      email: parseJsonString(json['email'], field: 'email'),
+      name: parseJsonString(json['name'], field: 'name'),
+      role: parseUserRoleValue(json['role']),
     );
   }
 

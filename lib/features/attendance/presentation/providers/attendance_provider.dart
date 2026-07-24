@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/di/core_providers.dart';
 import '../../../../core/error/failures.dart';
 import '../../../members/domain/entities/member.dart';
+import '../../../members/domain/usecases/members_usecases.dart';
 import '../../../members/presentation/providers/members_provider.dart';
 import '../../data/datasources/attendance_remote_datasource.dart';
 import '../../data/repositories/attendance_repository_impl.dart';
@@ -34,11 +35,15 @@ class MemberAttendanceDraft {
     required this.member,
     this.status = AttendanceStatus.present,
     this.notes,
+    this.isLocked = false,
   });
 
   final Member member;
   AttendanceStatus status;
   String? notes;
+
+  /// Ya tiene asistencia registrada ese sábado: no se puede modificar.
+  final bool isLocked;
 }
 
 class AttendanceSessionState {
@@ -103,18 +108,18 @@ class AttendanceSessionNotifier extends StateNotifier<AttendanceSessionState> {
     required this._getSaturdays,
     required this._getByDate,
     required this._saveBulk,
-    required this._ref,
+    required this._getMembers,
   }) : super(AttendanceSessionState(
           year: DateTime.now().year,
           month: DateTime.now().month,
         )) {
-    loadSaturdays();
+    Future.microtask(loadSaturdays);
   }
 
   final GetSaturdaysUseCase _getSaturdays;
   final GetAttendanceByDateUseCase _getByDate;
   final SaveBulkAttendanceUseCase _saveBulk;
-  final Ref _ref;
+  final GetActiveMembersUseCase _getMembers;
 
   Future<void> setYearMonth(int year, int month) async {
     state = state.copyWith(
@@ -157,18 +162,21 @@ class AttendanceSessionNotifier extends StateNotifier<AttendanceSessionState> {
       clearSuccess: true,
     );
     try {
-      await _ref.read(membersListProvider.notifier).load();
-      final members = _ref.read(membersListProvider).members;
+      final members = await _getMembers();
       final existing = await _getByDate(date);
       final byMember = {for (final r in existing) r.memberId: r};
 
       final drafts = members
           .map(
-            (m) => MemberAttendanceDraft(
-              member: m,
-              status: byMember[m.id]?.status ?? AttendanceStatus.present,
-              notes: byMember[m.id]?.notes,
-            ),
+            (m) {
+              final existingRecord = byMember[m.id];
+              return MemberAttendanceDraft(
+                member: m,
+                status: existingRecord?.status ?? AttendanceStatus.present,
+                notes: existingRecord?.notes,
+                isLocked: existingRecord != null,
+              );
+            },
           )
           .toList();
 
@@ -183,28 +191,45 @@ class AttendanceSessionNotifier extends StateNotifier<AttendanceSessionState> {
     }
   }
 
-  void updateStatus(int memberId, AttendanceStatus status) {
+  /// Retorna false si el miembro ya tiene asistencia bloqueada.
+  bool updateStatus(int memberId, AttendanceStatus status) {
     final drafts = [...state.drafts];
     final index = drafts.indexWhere((d) => d.member.id == memberId);
-    if (index < 0) return;
+    if (index < 0) return true;
+    if (drafts[index].isLocked) return false;
     drafts[index].status = status;
     state = state.copyWith(drafts: drafts, clearSuccess: true);
+    return true;
   }
 
-  void updateNotes(int memberId, String? notes) {
+  /// Retorna false si el miembro ya tiene asistencia bloqueada.
+  bool updateNotes(int memberId, String? notes) {
     final drafts = [...state.drafts];
     final index = drafts.indexWhere((d) => d.member.id == memberId);
-    if (index < 0) return;
+    if (index < 0) return true;
+    if (drafts[index].isLocked) return false;
     drafts[index].notes = notes;
     state = state.copyWith(drafts: drafts, clearSuccess: true);
+    return true;
   }
 
   Future<bool> save() async {
     final date = state.selectedDate;
     if (date == null) return false;
+
+    final pending = state.drafts.where((d) => !d.isLocked).toList();
+    if (pending.isEmpty) {
+      state = state.copyWith(
+        errorMessage:
+            'Todos los miembros de este sábado ya tienen asistencia registrada. Solo se puede poner una vez.',
+        clearSuccess: true,
+      );
+      return false;
+    }
+
     state = state.copyWith(isSaving: true, clearError: true, clearSuccess: true);
     try {
-      final records = state.drafts
+      final records = pending
           .map(
             (d) => AttendanceBulkItem(
               memberId: d.member.id,
@@ -216,6 +241,8 @@ class AttendanceSessionNotifier extends StateNotifier<AttendanceSessionState> {
           )
           .toList();
       await _saveBulk(date: date, records: records);
+      // Recarga la fecha para marcar como bloqueados los recién guardados.
+      await selectSaturday(date);
       state = state.copyWith(
         isSaving: false,
         successMessage: 'Lista guardada correctamente',
@@ -238,16 +265,34 @@ final attendanceSessionProvider =
       getSaturdays: ref.watch(getSaturdaysUseCaseProvider),
       getByDate: ref.watch(getAttendanceByDateUseCaseProvider),
       saveBulk: ref.watch(saveBulkAttendanceUseCaseProvider),
-      ref: ref,
+      getMembers: ref.watch(getActiveMembersUseCaseProvider),
     );
   },
 );
+
+enum StatsStatusFilter { present, late, absent }
+
+class SaturdayAttendanceGroup {
+  const SaturdayAttendanceGroup({
+    required this.date,
+    required this.records,
+  });
+
+  final DateTime date;
+  final List<AttendanceRecord> records;
+
+  List<AttendanceRecord> byStatus(AttendanceStatus status) =>
+      records.where((r) => r.status == status).toList();
+}
 
 class StatsState {
   const StatsState({
     required this.year,
     required this.month,
     this.stats = const [],
+    this.membersById = const {},
+    this.saturdayGroups = const [],
+    this.filter,
     this.isLoading = false,
     this.errorMessage,
   });
@@ -255,13 +300,57 @@ class StatsState {
   final int year;
   final int month;
   final List<MemberAttendanceStats> stats;
+  final Map<int, Member> membersById;
+  final List<SaturdayAttendanceGroup> saturdayGroups;
+  final StatsStatusFilter? filter;
   final bool isLoading;
   final String? errorMessage;
+
+  int get totalPresent => _countStatus(AttendanceStatus.present);
+  int get totalLate => _countStatus(AttendanceStatus.late);
+  int get totalAbsent => _countStatus(AttendanceStatus.absent);
+
+  /// Totales solo de sábados (coherente con el detalle por fecha).
+  int _countStatus(AttendanceStatus status) {
+    var count = 0;
+    for (final group in saturdayGroups) {
+      count += group.byStatus(status).length;
+    }
+    return count;
+  }
+
+  List<MemberAttendanceStats> get rankedByFilter {
+    final list = [...stats];
+    switch (filter) {
+      case StatsStatusFilter.present:
+        list.sort((a, b) => b.totalPresent.compareTo(a.totalPresent));
+        return list.where((s) => s.totalPresent > 0).toList();
+      case StatsStatusFilter.late:
+        list.sort((a, b) => b.totalLate.compareTo(a.totalLate));
+        return list.where((s) => s.totalLate > 0).toList();
+      case StatsStatusFilter.absent:
+        list.sort((a, b) => b.totalAbsent.compareTo(a.totalAbsent));
+        return list.where((s) => s.totalAbsent > 0).toList();
+      case null:
+        list.sort((a, b) {
+          final aTotal = a.totalPresent + a.totalLate + a.totalAbsent;
+          final bTotal = b.totalPresent + b.totalLate + b.totalAbsent;
+          final aRate = aTotal == 0 ? 0.0 : a.totalPresent / aTotal;
+          final bRate = bTotal == 0 ? 0.0 : b.totalPresent / bTotal;
+          return bRate.compareTo(aRate);
+        });
+        return list;
+    }
+  }
 
   StatsState copyWith({
     int? year,
     int? month,
     List<MemberAttendanceStats>? stats,
+    Map<int, Member>? membersById,
+    List<SaturdayAttendanceGroup>? saturdayGroups,
+    StatsStatusFilter? filter,
+    bool clearFilter = false,
     bool? isLoading,
     String? errorMessage,
     bool clearError = false,
@@ -270,6 +359,9 @@ class StatsState {
       year: year ?? this.year,
       month: month ?? this.month,
       stats: stats ?? this.stats,
+      membersById: membersById ?? this.membersById,
+      saturdayGroups: saturdayGroups ?? this.saturdayGroups,
+      filter: clearFilter ? null : (filter ?? this.filter),
       isLoading: isLoading ?? this.isLoading,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
     );
@@ -277,28 +369,72 @@ class StatsState {
 }
 
 class StatsNotifier extends StateNotifier<StatsState> {
-  StatsNotifier(this._getStats, this._ref)
-      : super(StatsState(
+  StatsNotifier({
+    required this._getStats,
+    required this._getMembers,
+    required this._getSaturdays,
+    required this._getByDate,
+  }) : super(StatsState(
           year: DateTime.now().year,
           month: DateTime.now().month,
         )) {
-    load();
+    Future.microtask(load);
   }
 
   final GetAttendanceStatsUseCase _getStats;
-  final Ref _ref;
+  final GetActiveMembersUseCase _getMembers;
+  final GetSaturdaysUseCase _getSaturdays;
+  final GetAttendanceByDateUseCase _getByDate;
 
   Future<void> setYearMonth(int year, int month) async {
-    state = state.copyWith(year: year, month: month);
+    state = state.copyWith(year: year, month: month, clearFilter: true);
     await load();
+  }
+
+  void setFilter(StatsStatusFilter? filter) {
+    if (state.filter == filter) {
+      state = state.copyWith(clearFilter: true);
+    } else {
+      state = state.copyWith(filter: filter);
+    }
   }
 
   Future<void> load() async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      await _ref.read(membersListProvider.notifier).load();
-      final stats = await _getStats(state.year, state.month);
-      state = state.copyWith(stats: stats, isLoading: false);
+      final year = state.year;
+      final month = state.month;
+
+      final base = await Future.wait([
+        _getStats(year, month),
+        _getMembers(),
+        _getSaturdays(year, month),
+      ]);
+
+      final stats = base[0] as List<MemberAttendanceStats>;
+      final members = base[1] as List<Member>;
+      final saturdays = base[2] as List<DateTime>;
+
+      final recordsByDate = await Future.wait(
+        saturdays.map((date) => _getByDate(date)),
+      );
+
+      final groups = <SaturdayAttendanceGroup>[];
+      for (var i = 0; i < saturdays.length; i++) {
+        groups.add(
+          SaturdayAttendanceGroup(
+            date: saturdays[i],
+            records: recordsByDate[i],
+          ),
+        );
+      }
+
+      state = state.copyWith(
+        stats: stats,
+        membersById: {for (final m in members) m.id: m},
+        saturdayGroups: groups,
+        isLoading: false,
+      );
     } on Failure catch (e) {
       state = state.copyWith(isLoading: false, errorMessage: e.message);
     } catch (e) {
@@ -310,7 +446,9 @@ class StatsNotifier extends StateNotifier<StatsState> {
 final statsProvider =
     StateNotifierProvider<StatsNotifier, StatsState>((ref) {
   return StatsNotifier(
-    ref.watch(getAttendanceStatsUseCaseProvider),
-    ref,
+    getStats: ref.watch(getAttendanceStatsUseCaseProvider),
+    getMembers: ref.watch(getActiveMembersUseCaseProvider),
+    getSaturdays: ref.watch(getSaturdaysUseCaseProvider),
+    getByDate: ref.watch(getAttendanceByDateUseCaseProvider),
   );
 });

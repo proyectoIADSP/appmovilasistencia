@@ -1,3 +1,4 @@
+import '../../../../core/network/json_parsers.dart';
 import '../../domain/entities/member.dart';
 
 class MemberDto {
@@ -19,12 +20,14 @@ class MemberDto {
 
   factory MemberDto.fromJson(Map<String, dynamic> json) {
     return MemberDto(
-      id: json['id'] as int,
-      firstName: json['firstName'] as String,
-      lastName: json['lastName'] as String,
-      phoneNumber: json['phoneNumber'] as String,
-      address: json['address'] as String?,
-      isActive: json['isActive'] as bool? ?? true,
+      id: parseJsonInt(json['id'], field: 'id'),
+      firstName: parseJsonString(json['firstName'], field: 'firstName'),
+      lastName: parseJsonString(json['lastName'], field: 'lastName'),
+      phoneNumber: parseJsonString(json['phoneNumber'], field: 'phoneNumber'),
+      address: json['address'] == null
+          ? null
+          : parseJsonString(json['address'], field: 'address'),
+      isActive: parseJsonBool(json['isActive'], fallback: true),
     );
   }
 

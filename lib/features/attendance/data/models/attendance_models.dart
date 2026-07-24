@@ -1,3 +1,4 @@
+import '../../../../core/network/json_parsers.dart';
 import '../../domain/entities/attendance.dart';
 
 DateTime parseDateOnly(String value) {
@@ -14,6 +15,20 @@ String formatDateOnly(DateTime date) {
   final m = date.month.toString().padLeft(2, '0');
   final d = date.day.toString().padLeft(2, '0');
   return '$y-$m-$d';
+}
+
+String parseDateOnlyField(dynamic value) {
+  if (value == null) {
+    throw const FormatException('Campo "date" es nulo');
+  }
+  if (value is String) {
+    return value.length >= 10 ? value.substring(0, 10) : value;
+  }
+  if (value is DateTime) {
+    return formatDateOnly(value);
+  }
+  final asString = parseJsonString(value, field: 'date');
+  return asString.length >= 10 ? asString.substring(0, 10) : asString;
 }
 
 class AttendanceRecordDto {
@@ -35,12 +50,15 @@ class AttendanceRecordDto {
 
   factory AttendanceRecordDto.fromJson(Map<String, dynamic> json) {
     return AttendanceRecordDto(
-      id: json['id'] as int,
-      memberId: json['memberId'] as int,
-      date: json['date'] as String,
-      status: json['status'] as int,
-      notes: json['notes'] as String?,
-      registeredByUserId: json['registeredByUserId'] as int,
+      id: parseJsonInt(json['id'], field: 'id'),
+      memberId: parseJsonInt(json['memberId'], field: 'memberId'),
+      date: parseDateOnlyField(json['date']),
+      status: parseAttendanceStatusValue(json['status']),
+      notes: json['notes'] == null
+          ? null
+          : parseJsonString(json['notes'], field: 'notes'),
+      registeredByUserId:
+          parseJsonInt(json['registeredByUserId'], field: 'registeredByUserId'),
     );
   }
 
@@ -102,10 +120,10 @@ class MemberAttendanceStatsDto {
 
   factory MemberAttendanceStatsDto.fromJson(Map<String, dynamic> json) {
     return MemberAttendanceStatsDto(
-      memberId: json['memberId'] as int,
-      totalPresent: json['totalPresent'] as int,
-      totalLate: json['totalLate'] as int,
-      totalAbsent: json['totalAbsent'] as int,
+      memberId: parseJsonInt(json['memberId'], field: 'memberId'),
+      totalPresent: parseJsonInt(json['totalPresent'], field: 'totalPresent'),
+      totalLate: parseJsonInt(json['totalLate'], field: 'totalLate'),
+      totalAbsent: parseJsonInt(json['totalAbsent'], field: 'totalAbsent'),
     );
   }
 
