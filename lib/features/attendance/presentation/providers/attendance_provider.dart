@@ -34,17 +34,21 @@ final getAttendanceStatsUseCaseProvider = Provider(
 class MemberAttendanceDraft {
   MemberAttendanceDraft({
     required this.member,
-    this.status = AttendanceStatus.present,
+    this.status,
     this.notes,
     this.isLocked = false,
   });
 
   final Member member;
-  AttendanceStatus status;
+
+  /// null = aún no marcado (no se enviará al guardar).
+  AttendanceStatus? status;
   String? notes;
 
   /// Ya tiene asistencia registrada ese sábado: no se puede modificar.
   final bool isLocked;
+
+  bool get isMarked => status != null;
 }
 
 class AttendanceSessionState {
@@ -173,7 +177,8 @@ class AttendanceSessionNotifier extends StateNotifier<AttendanceSessionState> {
               final existingRecord = byMember[m.id];
               return MemberAttendanceDraft(
                 member: m,
-                status: existingRecord?.status ?? AttendanceStatus.present,
+                // Sin registro previo: en blanco (null). No asumir "Presente".
+                status: existingRecord?.status,
                 notes: existingRecord?.notes,
                 isLocked: existingRecord != null,
               );
@@ -218,11 +223,17 @@ class AttendanceSessionNotifier extends StateNotifier<AttendanceSessionState> {
     final date = state.selectedDate;
     if (date == null) return false;
 
-    final pending = state.drafts.where((d) => !d.isLocked).toList();
+    // Solo los que el usuario marcó explícitamente en esta sesión.
+    final pending = state.drafts
+        .where((d) => !d.isLocked && d.status != null)
+        .toList();
     if (pending.isEmpty) {
+      final allLocked = state.drafts.isNotEmpty &&
+          state.drafts.every((d) => d.isLocked);
       state = state.copyWith(
-        errorMessage:
-            'Todos los miembros de este sábado ya tienen asistencia registrada. Solo se puede poner una vez.',
+        errorMessage: allLocked
+            ? 'Todos los miembros de este sábado ya tienen asistencia registrada. Solo se puede poner una vez.'
+            : 'Marca al menos un miembro (Presente, Tarde o Ausente) antes de guardar.',
         clearSuccess: true,
       );
       return false;
@@ -234,7 +245,7 @@ class AttendanceSessionNotifier extends StateNotifier<AttendanceSessionState> {
           .map(
             (d) => AttendanceBulkItem(
               memberId: d.member.id,
-              status: d.status,
+              status: d.status!,
               notes: (d.notes == null || d.notes!.trim().isEmpty)
                   ? null
                   : d.notes!.trim(),
@@ -246,7 +257,9 @@ class AttendanceSessionNotifier extends StateNotifier<AttendanceSessionState> {
       await selectSaturday(date);
       state = state.copyWith(
         isSaving: false,
-        successMessage: 'Lista guardada correctamente',
+        successMessage: records.length == 1
+            ? 'Asistencia de 1 miembro guardada'
+            : 'Asistencia de ${records.length} miembros guardada',
       );
       return true;
     } on Failure catch (e) {

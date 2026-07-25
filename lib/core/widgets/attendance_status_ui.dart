@@ -5,13 +5,31 @@ import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 
 class AttendanceStatusBadge extends StatelessWidget {
-  const AttendanceStatusBadge({super.key, required this.status});
+  const AttendanceStatusBadge({super.key, this.status});
 
-  final AttendanceStatus status;
+  final AttendanceStatus? status;
 
   @override
   Widget build(BuildContext context) {
-    final (bg, fg) = switch (status) {
+    if (status == null) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: AppColors.outline.withValues(alpha: 0.35),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: const Text(
+          'Sin marcar',
+          style: TextStyle(
+            color: AppColors.textSecondary,
+            fontWeight: FontWeight.w700,
+            fontSize: 12,
+          ),
+        ),
+      );
+    }
+
+    final (bg, fg) = switch (status!) {
       AttendanceStatus.present => (AppColors.presentBg, AppColors.present),
       AttendanceStatus.late => (AppColors.lateBg, AppColors.late),
       AttendanceStatus.absent => (AppColors.absentBg, AppColors.absent),
@@ -24,7 +42,7 @@ class AttendanceStatusBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
-        status.labelEs,
+        status!.labelEs,
         style: TextStyle(
           color: fg,
           fontWeight: FontWeight.w700,
@@ -42,7 +60,7 @@ class AttendanceStatusSelector extends StatelessWidget {
     required this.onChanged,
   });
 
-  final AttendanceStatus value;
+  final AttendanceStatus? value;
   final ValueChanged<AttendanceStatus> onChanged;
 
   @override

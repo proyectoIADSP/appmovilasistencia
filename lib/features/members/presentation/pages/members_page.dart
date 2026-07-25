@@ -435,18 +435,20 @@ class _MemberFormPageState extends ConsumerState<MemberFormPage> {
           .read(inactiveMembersProvider.notifier)
           .rememberDeactivated(widget.member!);
       if (mounted) {
+        final container = ProviderScope.containerOf(context);
+        final memberId = widget.member!.id;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('Miembro desactivado'),
             action: SnackBarAction(
               label: 'Reactivar',
               onPressed: () {
-                ref
+                container
                     .read(inactiveMembersProvider.notifier)
-                    .activate(widget.member!.id)
+                    .activate(memberId)
                     .then((ok) {
                   if (ok) {
-                    ref.read(membersListProvider.notifier).load();
+                    container.read(membersListProvider.notifier).load();
                   }
                 });
               },

@@ -125,23 +125,34 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                 color: Colors.white,
                 border: Border(top: BorderSide(color: AppColors.outline)),
               ),
-              child: FilledButton.icon(
-                onPressed: state.isSaving || state.isLoadingList
-                    ? null
-                    : () => notifier.save(),
-                icon: state.isSaving
-                    ? const SizedBox(
-                        height: 18,
-                        width: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Icon(Icons.save_rounded),
-                label: Text(
-                  state.isSaving ? 'Guardando…' : 'Guardar lista',
-                ),
+              child: Builder(
+                builder: (context) {
+                  final pendingCount = state.drafts
+                      .where((d) => !d.isLocked && d.status != null)
+                      .length;
+                  return FilledButton.icon(
+                    onPressed: state.isSaving || state.isLoadingList
+                        ? null
+                        : () => notifier.save(),
+                    icon: state.isSaving
+                        ? const SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.save_rounded),
+                    label: Text(
+                      state.isSaving
+                          ? 'Guardando…'
+                          : pendingCount == 0
+                              ? 'Guardar marcados'
+                              : 'Guardar $pendingCount marcado${pendingCount == 1 ? '' : 's'}',
+                    ),
+                  );
+                },
               ),
             ),
           ),
@@ -240,7 +251,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                   ? '${filtered.length} en lista'
                   : '${filtered.length} encontrados',
               subtitle:
-                  'La asistencia ya registrada no se puede modificar',
+                  'Marca solo a quien corresponda; al guardar se envían solo los marcados',
             ),
           );
         }
